@@ -158,7 +158,10 @@ export function EnrolmentPanel({
         </button>
       </form>
 
-      <div className='mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-4'>
+      {/* Light-colored divider separating the form from filter & student list */}
+      <hr className='my-6 border-slate-200' />
+
+      <div className='flex flex-wrap gap-3'>
         <input
           placeholder='Search by name, ID (SMS-2026-...), or email...'
           value={q}

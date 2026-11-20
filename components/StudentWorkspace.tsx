@@ -165,7 +165,7 @@ export function StudentWorkspace({
                   <div className='text-lg font-bold text-slate-900'>
                     {g.score} / 100
                   </div>
-                  <div className='text-xs font-semibold text-indigo-700'>
+                  <div className='text-xs font-semibold text-slate-700'>
                     {classifyScore(g.score)}
                   </div>
                 </div>
