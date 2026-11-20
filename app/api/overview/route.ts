@@ -2,13 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateFeeSummary } from '@/lib/domain';
 
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const q = (searchParams.get('q') || '').trim().toLowerCase();
-    const programmeId = (searchParams.get('programmeId') || '').trim();
-    const status = (searchParams.get('status') || '').trim();
+function isPrerenderBailout(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    (err as { digest?: string }).digest === 'NEXT_PRERENDER_INTERRUPTED'
+  );
+}
 
+export async function GET(req: NextRequest) {
+  const searchParams = req.nextUrl.searchParams;
+  const q = (searchParams.get('q') || '').trim().toLowerCase();
+  const programmeId = (searchParams.get('programmeId') || '').trim();
+  const status = (searchParams.get('status') || '').trim();
+
+  try {
     const [rawProgrammes, rawStudents, rawAssessments] = await Promise.all([
       prisma.programme.findMany({ orderBy: { name: 'asc' } }),
       prisma.student.findMany({
@@ -153,9 +162,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ programmes, students, assessments });
   } catch (err) {
-    console.error('GET /api/overview error:', err);
+    if (isPrerenderBailout(err)) {
+      throw err;
+    }
+    console.error('GET /api/overview failed:', err);
     return NextResponse.json(
-      { error: 'Failed to load registry data' },
+      { error: 'Failed to load overview data' },
       { status: 500 },
     );
   }
