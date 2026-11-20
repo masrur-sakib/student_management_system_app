@@ -1,36 +1,165 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SMS Registry Module
 
-## Getting Started
+A full-stack Student Management System (SMS) Registry Module built with **Next.js (App Router)**, **Tailwind CSS**, **Prisma 7**, and **PostgreSQL (Neon)**. It supports both **Staff View** and **Student View** workflows across enrolment, tuition fee tracking, coursework assessment/submission handling, and marksheet grading.
 
-First, run the development server:
+## Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Framework:** Next.js (App Router)
+
+- **Styling:** Tailwind CSS
+
+- **ORM & Database:** Prisma 7 (`prisma-client` TypeScript generator + `@prisma/adapter-neon`) with PostgreSQL hosted on Neon
+
+- **Language:** TypeScript
+
+## Core Domain Features & Rules
+
+1. **Student Enrolment & Sequential IDs**
+   - Creates student records linked to academic programmes with auto-incrementing sequential student codes in the format `SMS-YYYY-NNNN` (for example, `SMS-2026-0001`).
+
+   - Supports searching and filtering by keyword (name, student ID, or email), programme, and enrolment status (`ENROLLED`, `DEFERRED`, `WITHDRAWN`, `COMPLETED`), plus updating student status.
+
+2. **Tuition Fees, Balances & Overdue Alerts**
+   - Calculates tuition balances from programme tuition fees and recorded payments.
+
+   - Flags overdue fee accounts and surfaces overdue alerts via the registry banner and student fee summaries.
+
+3. **Assessments & File Submissions**
+   - Allows staff to create assessments with deadlines and students to upload coursework submissions in the Student View.
+
+   - Enforces **one submission file per student per assessment**.
+
+   - **Blocks resubmissions after the deadline** and **flags late uploads** when submitted past the due date.
+
+4. **Marksheet & Grade Classification**
+   - Records numeric scores (`0–100`) per student and assessment with publication control (`isPublished`).
+
+   - Classifies marks into standard grade bands (**Distinction**, **Merit**, **Pass**, or **Fail**).
+
+## Project Structure
+
+```
+├── app/
+│   ├── api/
+│   │   ├── overview/        # Aggregated registry overview & filtered queries
+│   │   ├── students/        # Student creation, search/filtering & status updates
+│   │   ├── payments/        # Tuition fee payment recording
+│   │   ├── assessments/     # Assessment creation & listing
+│   │   ├── submissions/     # File submission handling, deadline & late checks
+│   │   └── grades/          # Grade entry, classification & publish toggle
+│   ├── enrolment/           # Enrolment workflow view
+│   ├── fees/                # Fees & payments workflow view
+│   ├── assessments/         # Assessments & submissions workflow view
+│   ├── marksheet/           # Marksheet & grading workflow view
+│   ├── layout.tsx           # Root layout & fonts
+│   └── page.tsx             # Main registry shell entry point
+├── components/
+│   ├── RegistryShell.tsx    # Top header, Staff/Student toggle, nav bar & role views
+│   ├── OverviewSectionCard.tsx
+│   ├── OverdueBanner.tsx
+│   ├── EnrolmentPanel.tsx
+│   ├── PaymentsPanel.tsx
+│   ├── AssessmentsPanel.tsx
+│   ├── MarksheetPanel.tsx
+│   └── StudentWorkspace.tsx
+├── lib/
+│   ├── prisma.ts            # Prisma 7 client with Neon adapter
+│   ├── domain.ts            # Fee balance, overdue & score classification logic
+│   └── types.ts             # Shared DTOs and TypeScript types
+├── prisma/
+│   ├── schema.prisma        # Database models & relations
+│   └── seed.ts              # Seed script for initial programmes, students & records
+└── prisma.config.ts         # Prisma 7 configuration
+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create a `.env` or `.env.local` file in the project root with your Neon PostgreSQL connection strings:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+# Pooled connection string used at runtime by @prisma/adapter-neon
+DATABASE_URL="postgresql://<user>:<password>@<endpoint>-pooler.<region>.aws.neon.tech/<dbname>?sslmode=require"
 
-## Learn More
+# Direct (unpooled) connection string used by Prisma CLI / migrations
+DIRECT_URL="postgresql://<user>:<password>@<endpoint>.<region>.aws.neon.tech/<dbname>?sslmode=require"
 
-To learn more about Next.js, take a look at the following resources:
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Local Setup & Development
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Install dependencies:**
 
-## Deploy on Vercel
+   ```
+   npm install
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Generate Prisma Client & push/migrate schema to Neon:**
+
+   ```
+   npx prisma generate
+   npx prisma migrate deploy
+
+   ```
+
+   _(During local schema iteration, you can use `npx prisma db push` or `npx prisma migrate dev`.)_
+
+3. **Seed the database:**
+
+   ```
+   npx prisma db seed
+
+   ```
+
+4. **Start the development server:**
+
+   ```
+   npm run dev
+
+   ```
+
+   Open <http://localhost:3000> in your browser.
+
+## Building & Deploying to Vercel
+
+1. **Ensure build generation is configured in `package.json`:**
+
+   ```
+   {
+     "scripts": {
+       "dev": "next dev",
+       "build": "prisma generate && next build",
+       "start": "next start",
+       "lint": "eslint",
+       "postinstall": "prisma generate"
+     }
+   }
+
+   ```
+
+2. **Verify locally before pushing:**
+
+   ```
+   npx prisma generate
+   npm run lint
+   npm run build
+
+   ```
+
+3. **Push to GitHub & Import on Vercel:**
+   - Push your repository to GitHub.
+
+   - Import the repository into **Vercel** and add `DATABASE_URL` and `DIRECT_URL` under **Environment Variables**.
+
+   - Deploy the project and verify staff and student workflows against your live Neon database.
+
+## How AI Was Used During the Build
+
+AI was integrated as an end-to-end engineering partner from initial project setup through production deployment on Vercel:
+
+- **Planning, Database Schema & Domain Architecture:** Used AI from the outset to map out the assessment requirements into a clean Prisma 7 schema (`Programme`, `Student`, `Payment`, `Assessment`, `Submission`, `Mark`) configured with `@prisma/adapter-neon` for PostgreSQL, alongside core domain rules for sequential `SMS-YYYY-NNNN` ID generation, fee balance/overdue calculations, deadline enforcement, and grade classification.
+- **Full-Stack Implementation & Component Modularization:** Leveraged AI to scaffold the Next.js App Router API routes and break down the interface into focused, maintainable React components (`RegistryShell`, `EnrolmentPanel`, `PaymentsPanel`, `AssessmentsPanel`, `MarksheetPanel`, `StudentWorkspace`, and `OverdueBanner`).
+- **UI/UX & Styling Iteration:** Collaborated with AI to refine the Tailwind CSS layout—including the sticky global header with centered `Staff View` / `Student View` switching, cohesive sub-navigation tabs, responsive four-card overview grid, and structured form/table dividers.
+- **Debugging, Build Optimization & Deployment:** Relied on AI to diagnose and resolve React hydration mismatches, TypeScript type errors, Next.js dynamic route prerendering bailouts during `npm run build`, and environment configuration for Neon and Vercel.
+- **Testing & Human Verification:** Every AI-assisted output—across schema migrations, seed data, API validations, edge cases (such as late/duplicate submissions and overdue payment alerts), and production builds—was manually reviewed, tested locally, and verified against all assessment criteria.
