@@ -1,3 +1,6 @@
-export default function Home() {
-  return <div>Student Management System</div>;
+// app/page.tsx
+import { RegistryShell } from '@/components/RegistryShell';
+
+export default function HomePage() {
+  return <RegistryShell section='all' />;
 }
