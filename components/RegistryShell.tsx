@@ -136,8 +136,9 @@ export function RegistryShell({ section = 'all' }: { section?: SectionMode }) {
   return (
     <div className='min-h-screen bg-slate-50 text-slate-900'>
       <header className='border-b border-slate-200 bg-white'>
-        <div className='mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4'>
-          <div>
+        <div className='mx-auto grid max-w-7xl grid-cols-1 items-center gap-4 px-6 py-4 md:grid-cols-3'>
+          {/* Left: Logo/Title */}
+          <div className='justify-self-start'>
             <h1 className='text-xl font-bold tracking-tight text-slate-900'>
               SMS Registry Module
             </h1>
@@ -146,23 +147,11 @@ export function RegistryShell({ section = 'all' }: { section?: SectionMode }) {
             </p>
           </div>
 
-          <div className='flex flex-wrap items-center gap-3'>
-            {role === 'STUDENT' && data.students.length > 0 && (
-              <select
-                value={currentStudent?.id || ''}
-                onChange={(e) => setActiveStudentId(e.target.value)}
-                className='rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium'
-              >
-                {data.students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.studentCode} — {s.fullName}
-                  </option>
-                ))}
-              </select>
-            )}
-
+          {/* Center: Staff / Student Toggle */}
+          <div className='justify-self-center'>
             <div className='inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1'>
               <button
+                type='button'
                 onClick={() => setRole('STAFF')}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                   role === 'STAFF'
@@ -173,6 +162,7 @@ export function RegistryShell({ section = 'all' }: { section?: SectionMode }) {
                 Staff View
               </button>
               <button
+                type='button'
                 onClick={() => setRole('STUDENT')}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                   role === 'STUDENT'
@@ -183,6 +173,32 @@ export function RegistryShell({ section = 'all' }: { section?: SectionMode }) {
                 Student View
               </button>
             </div>
+          </div>
+
+          {/* Far Right: Active Student Dropdown (in Student View) */}
+          <div className='flex items-center justify-end md:justify-self-end'>
+            {role === 'STUDENT' && data.students.length > 0 && (
+              <div className='flex items-center gap-2'>
+                <label
+                  htmlFor='active-student-select'
+                  className='text-xs font-medium text-slate-500'
+                >
+                  Viewing as:
+                </label>
+                <select
+                  id='active-student-select'
+                  value={currentStudent?.id || ''}
+                  onChange={(e) => setActiveStudentId(e.target.value)}
+                  className='rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900'
+                >
+                  {data.students.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.studentCode} — {s.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 

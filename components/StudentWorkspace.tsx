@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { classifyScore } from '@/lib/domain';
 import { AssessmentDTO, StudentDTO } from '@/lib/types';
 
@@ -20,6 +20,7 @@ export function StudentWorkspace({
   const [assessmentId, setAssessmentId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedAssessmentId = assessmentId || assessments[0]?.id || '';
   const publishedGrades = student.grades.filter((g) => g.isPublished);
@@ -45,6 +46,10 @@ export function StudentWorkspace({
       if (!res.ok) return onNotify('err', data.error || 'Upload failed');
 
       setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
       onNotify(
         'ok',
         data.submission.isLate
@@ -82,6 +87,7 @@ export function StudentWorkspace({
           </select>
 
           <input
+            ref={fileInputRef}
             type='file'
             accept='.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
             onChange={(e) => setFile(e.target.files?.[0] || null)}
