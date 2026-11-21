@@ -1,105 +1,139 @@
-// app/api/submissions/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
-import { mkdir, writeFile } from 'fs/promises';
-import path from 'path';
 
-const ALLOWED_MIMES = new Set([
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]);
+const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB (safely under Vercel's 4.5 MB body limit)
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const searchParams = req.nextUrl.searchParams;
+    const studentId = searchParams.get('studentId')?.trim();
+    const assessmentId = searchParams.get('assessmentId')?.trim();
+
+    const submissions = await prisma.submission.findMany({
+      where: {
+        ...(studentId ? { studentId } : {}),
+        ...(assessmentId ? { assessmentId } : {}),
+      },
+      include: {
+        student: true,
+        assessment: true,
+      },
+      orderBy: {
+        submittedAt: 'desc',
+      },
+    });
+
+    return NextResponse.json({ submissions });
+  } catch (error) {
+    console.error('GET /api/submissions failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to load submissions' },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const assessmentId = String(formData.get('assessmentId') || '');
-    const studentId = String(formData.get('studentId') || '');
-    const file = formData.get('file') as File | null;
+    const studentId = String(formData.get('studentId') || '').trim();
+    const assessmentId = String(formData.get('assessmentId') || '').trim();
+    const fileEntry = formData.get('file');
 
-    if (!assessmentId || !studentId || !file) {
+    if (!studentId || !assessmentId) {
       return NextResponse.json(
-        { error: 'Assessment, student, and a PDF or DOCX file are required' },
+        { error: 'Student ID and Assessment ID are required.' },
         { status: 400 },
       );
     }
 
-    const ext = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_MIMES.has(file.type) && ext !== '.pdf' && ext !== '.docx') {
+    if (!(fileEntry instanceof File) || fileEntry.size === 0) {
       return NextResponse.json(
-        {
-          error:
-            'Unsupported file format. Only PDF and DOCX files are allowed.',
-        },
+        { error: 'Please select a non-empty file to upload.' },
         { status: 400 },
       );
     }
 
-    const assessment = await prisma.assessment.findUnique({
-      where: { id: assessmentId },
-    });
-    if (!assessment) {
+    if (fileEntry.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
-        { error: 'Assessment not found' },
+        { error: 'File size must be 4 MB or smaller.' },
+        { status: 413 },
+      );
+    }
+
+    const [student, assessment] = await Promise.all([
+      prisma.student.findUnique({ where: { id: studentId } }),
+      prisma.assessment.findUnique({ where: { id: assessmentId } }),
+    ]);
+
+    if (!student) {
+      return NextResponse.json(
+        { error: 'Student not found.' },
         { status: 404 },
       );
     }
 
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
+    if (!assessment) {
+      return NextResponse.json(
+        { error: 'Assessment not found.' },
+        { status: 404 },
+      );
+    }
+
+    // Enforce one submission per student per assessment
+    const existingSubmission = await prisma.submission.findFirst({
+      where: {
+        studentId,
+        assessmentId,
+      },
     });
-    if (!student) {
-      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+
+    if (existingSubmission) {
+      return NextResponse.json(
+        { error: 'You have already submitted work for this assessment.' },
+        { status: 409 },
+      );
     }
 
     const now = new Date();
-    const isLate = now.getTime() > new Date(assessment.deadline).getTime();
+    const deadline = assessment.deadline ? new Date(assessment.deadline) : null;
+    const isLate = deadline ? now > deadline : false;
 
-    const uploadDir =
-      process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    await mkdir(uploadDir, { recursive: true });
+    const safeName = sanitizeFileName(fileEntry.name);
+    const blobPath = `submissions/${assessmentId}/${studentId}/${Date.now()}-${safeName}`;
 
-    const safeFileName = `${studentId}_${assessmentId}_${Date.now()}${ext || '.pdf'}`;
-    const fullPath = path.join(uploadDir, safeFileName);
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(fullPath, bytes);
+    // Upload directly to Vercel Blob (uses BLOB_READ_WRITE_TOKEN automatically)
+    const blob = await put(blobPath, fileEntry, {
+      access: 'private',
+      contentType: fileEntry.type || 'application/octet-stream',
+    });
 
-    const submission = await prisma.submission.upsert({
-      where: { assessmentId_studentId: { assessmentId, studentId } },
-      update: {
-        fileName: file.name,
-        filePath: fullPath,
-        mimeType: file.type || 'application/octet-stream',
-        submittedAt: now,
-        isLate,
-      },
-      create: {
-        assessmentId,
+    const submission = await prisma.submission.create({
+      data: {
         studentId,
-        fileName: file.name,
-        filePath: fullPath,
-        mimeType: file.type || 'application/octet-stream',
-        submittedAt: now,
+        assessmentId,
+        filePath: blob.url,
+        fileName: fileEntry.name,
+        mimeType: fileEntry.type || 'application/octet-stream',
         isLate,
+        submittedAt: now,
+      },
+      include: {
+        student: true,
+        assessment: true,
       },
     });
 
+    return NextResponse.json({ submission }, { status: 201 });
+  } catch (error) {
+    console.error('POST /api/submissions failed:', error);
     return NextResponse.json(
-      {
-        submission: {
-          id: submission.id,
-          assessmentId: submission.assessmentId,
-          studentId: submission.studentId,
-          fileName: submission.fileName,
-          submittedAt: submission.submittedAt.toISOString(),
-          isLate: submission.isLate,
-        },
-      },
-      { status: 201 },
-    );
-  } catch (err) {
-    console.error('POST /api/submissions error:', err);
-    return NextResponse.json(
-      { error: 'Failed to upload submission' },
+      { error: 'Failed to upload submission file.' },
       { status: 500 },
     );
   }
